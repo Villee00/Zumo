@@ -55,6 +55,9 @@
 void robot_turn_left(int speed, int delay); 
 void robot_turn_right(int speed, int delay); 
 void robot_keep_on_line(struct sensors_ dig);
+
+enum direction{forward, right, back, left};
+void switch_dir(enum direction *dir, char new_dir);
 #if 0
 // Hello World!
 void zmain(void)
@@ -254,7 +257,7 @@ void zmain(void)
 
 #if 1
 //reflectance
-enum direction{forward, right, back, left};
+
 void zmain(void)
 {
     struct sensors_ ref;
@@ -264,7 +267,10 @@ void zmain(void)
     motor_start();
     reflectance_set_threshold(9000, 9000, 11000, 11000, 9000, 9000); // set center sensor threshold to 11000 and others to 9000
     int stopLine = 0;
+    int b_crossed = 0;
+    int b_first_line = 0;
     
+    Ultra_Start();
     
     while(true){
         reflectance_digital(&dig);
@@ -288,21 +294,187 @@ void zmain(void)
         }
     }
     
-    //coordiante 1 is diagial line and 2 is vertical line
+    //coordiante 1 is horizontal line and 2 is vertical line
     int coordinates[] = {0,0};
-    enum direction dir;
+    enum direction dir = forward;
+    int forward_speed = 180;
     while(true)
     {
+        
+        // Print the detected distance (centimeters)
+        //printf("distance = %d\r\n", d);
+        
         reflectance_read(&ref);
         reflectance_digital(&dig); 
-        if(coordinates[0] == 0 && dig.l3&& dig.l2 && dig.l1 && dig.r1&& dig.r2 && dig.r3){
+        
+         if(coordinates[1] == 0 && dig.l3&& dig.l2 && dig.l1 && dig.r1&& dig.r2 && dig.r3 && !b_first_line){
             //motor_forward(100,25);
-            robot_turn_left(200,100);
+            //coordinates[1]++;
+            b_first_line = 1;
+            switch_dir(&dir,'l');
+            motor_forward(100,150);
         }
         else{
-            motor_forward(100,10);
+            motor_forward(forward_speed,10);
         }
+        
+        
+        if(coordinates[1] == 0 && dir == left){
+            if(coordinates[0] == -3 && dig.r1&& dig.r2 && dig.r3){
+                switch_dir(&dir,'r');
+                robot_turn_right(100,50);
+                dir = forward;
+            }
+            else if(dig.r1&& dig.r2 && dig.r3){
+                //coordinates[0]++;
+                motor_forward(forward_speed,10);
+            }
+        }
+        
+        if(dir == forward && coordinates[0] == 3){
+            if(dig.r1&& dig.r2 && dig.r3){
+                //coordinates[1]++;
+                motor_forward(forward_speed,100);
+            }
+        }
+        
+        if(coordinates[0] == 7 && dir == forward && dig.r1&& dig.r2 && dig.r3){
+                switch_dir(&dir,'r');
+                //robot_turn_right(200,100);
+                //coordinates[1]--;
+                //dir = right;
+        }
+        
+        
+        int d = Ultra_GetDistance();
+        if((d < 15 && dig.r1&& dig.r2 && dig.r3) ||(d < 15 && dig.l1&& dig.l2 && dig.l3)){
+            if(coordinates[0] <= 0){
+                switch_dir(&dir,'r');
+                robot_turn_right(100,50);
+            }
+            else{
+                switch_dir(&dir,'l');
+                robot_turn_left(100,50);
+            }
+            //dir = right;
+            int start_cord = coordinates[0];
+            while(true){
+                reflectance_digital(&dig);
+                if(dig.l3&& dig.l2 && dig.l1 && dig.r1&& dig.r2 && dig.r3){
+                    
+                    if(start_cord <= 0){
+                        coordinates[0]++;
+                        switch_dir(&dir,'l');
+                        robot_turn_left(100,50);
+                    }
+                    else{
+                        coordinates[0]--;
+                        switch_dir(&dir,'r');
+                        robot_turn_right(100,50);
+                    }
+                    d = Ultra_GetDistance();
+                    if(d > 15){
+                        break;
+                    }
+                    else{
+                        if(start_cord <= 0){
+                            robot_turn_right(200,100);
+                            robot_turn_right(100,50);
+                            d = Ultra_GetDistance();
+                            dir = right;
+                        }
+                        else{
+                            robot_turn_left(200,100);
+                            robot_turn_left(100,50);
+                            d = Ultra_GetDistance();
+                            dir = left;
+                        }
+                        
+                    }
+                }
+                motor_forward(forward_speed,10);
+                robot_keep_on_line(dig);
+            }
+            
+        }
+        if(dig.r1 && dig.l1 && !dig.l2 && !dig.r2 && b_crossed){
+            b_crossed = 0;
+        }
+        
+        //If robot is in the last full line go to the mid line.
+        if(coordinates[1] == 11){
+            if(coordinates[0] < 0){
+                switch_dir(&dir,'r');
+            }
+            else if(coordinates[0] > 0){
+                switch_dir(&dir,'l');
+            }
+           
+            while(true){
+                reflectance_digital(&dig);
+                if(coordinates[0] == 0){
+                    if(dir == right){
+                        switch_dir(&dir,'l');
+                    }
+                    else if(dir == left){
+                        switch_dir(&dir,'r');
+                    }
+                    break;
+                }
+                
+                if(dig.r1 && dig.l1 && !dig.l2 && !dig.r2 && b_crossed){
+                        b_crossed = 0;
+                }
+                
+                if((dig.r1&& dig.r2 && dig.r3 && !b_crossed) || (dig.l1&& dig.l2 && dig.l3 && !b_crossed)){
+                    b_crossed = 1;
+                    switch(dir){
+                        case left:
+                            coordinates[0]--;
+                            break;
+                        case right:
+                            coordinates[0]++;
+                            break;
+                        default:
+                            printf("ERROR: no direction");
+                            break;
+            
+                    }
+                    printf("%d - %d\n", coordinates[0], coordinates[1]);
+                }
+                motor_forward(forward_speed,10);
+                robot_keep_on_line(dig);
+            }
+        }
+        
+        
+        
+        if((dig.r1&& dig.r2 && dig.r3 && !b_crossed && b_first_line) || (dig.l1&& dig.l2 && dig.l3 && !b_crossed && b_first_line)){
+            b_crossed = 1;
+            switch(dir){
+                case forward:
+                    coordinates[1]++;
+                    break;
+                case left:
+                    coordinates[0]--;
+                    break;
+                case back:
+                    coordinates[1]--;
+                    break;
+                case right:
+                    coordinates[0]++;
+                    break;
+                default:
+                    printf("ERROR: no direction");
+                    break;
+            
+            }
+            printf("%d - %d\n", coordinates[0], coordinates[1]);
+        }
+        
+       
         robot_keep_on_line(dig);
+        
         // read raw sensor values
         
         // print out each period of reflectance sensors
@@ -497,7 +669,6 @@ void zmain(void)
     }
 }   
 #endif
-
 void robot_turn_left(int speed, int delay){
     SetMotors(1,0, speed, speed , delay);
 }
@@ -507,11 +678,63 @@ void robot_turn_right(int speed, int delay){
 
 void robot_keep_on_line(struct sensors_ dig){
     if(( dig.l2 && !dig.r2 && !dig.r3) ){
-        robot_turn_left(50,50);
+        robot_turn_left(50,10);
     }
-    else if( (!dig.l2 && dig.r2 && !dig.r3) ){
-        robot_turn_right(50,50);
+    else if( (!dig.l2 && dig.r2 && !dig.l3) ){
+        robot_turn_right(50,10);
     }
-    else motor_forward(100,50);
+    else if(( dig.l3 && !dig.r2 && !dig.r3) ){
+        robot_turn_right(100,10);
+    }
+    else if( (!dig.l2 && dig.r3 && !dig.l3) ){
+        robot_turn_right(100,10);
+    }
+    else motor_forward(100,10);
+}
+
+void switch_dir(enum direction *dir, char new_dir){
+    motor_forward(150,100);
+    if(new_dir == 'l'){
+        robot_turn_left(200,100);
+        switch(*dir){
+            case forward:
+                *dir = left;
+                break;
+            case left:
+                *dir = back;
+                break;
+            case back:
+                *dir = right;
+                break;
+            case right:
+                *dir = forward;
+                break;
+            default:
+                printf("ERROR: no direction");
+                break;
+            
+        } 
+    }
+    else if(new_dir == 'r'){
+        robot_turn_right(200,100);
+        switch(*dir){
+            case forward:
+                *dir = right;
+                break;
+            case left:
+                *dir = forward;
+                break;
+            case back:
+                *dir = left;
+                break;
+            case right:
+                *dir = back;
+                break;
+            default:
+                printf("ERROR: no direction");
+                break;
+            
+        }
+    }
 }
 /* [] END OF FILE */
