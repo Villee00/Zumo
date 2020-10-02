@@ -269,7 +269,8 @@ void zmain(void)
     int stopLine = 0;
     int b_crossed = 0;
     int b_first_line = 0;
-    
+    int start_time = 0;
+    int end_time = 0;
     Ultra_Start();
     
     while(true){
@@ -280,6 +281,10 @@ void zmain(void)
             while(true){
                 if(SW1_Read() == 0){
                     motor_forward(150,100);
+                    while(dig.l3&& dig.l2 && dig.l1 && dig.r1&& dig.r2 && dig.r3){
+                        reflectance_digital(&dig);
+                    }
+                    start_time = xTaskGetTickCount();
                     break;
                 }
             }
@@ -297,19 +302,13 @@ void zmain(void)
     //coordiante 1 is horizontal line and 2 is vertical line
     int coordinates[] = {0,0};
     enum direction dir = forward;
-    int forward_speed = 180;
+    int forward_speed = 235;
     while(true)
     {
-        
-        // Print the detected distance (centimeters)
-        //printf("distance = %d\r\n", d);
-        
         reflectance_read(&ref);
         reflectance_digital(&dig); 
         
          if(coordinates[1] == 0 && dig.l3&& dig.l2 && dig.l1 && dig.r1&& dig.r2 && dig.r3 && !b_first_line){
-            //motor_forward(100,25);
-            //coordinates[1]++;
             b_first_line = 1;
             switch_dir(&dir,'l');
             motor_forward(100,150);
@@ -326,23 +325,18 @@ void zmain(void)
                 dir = forward;
             }
             else if(dig.r1&& dig.r2 && dig.r3){
-                //coordinates[0]++;
                 motor_forward(forward_speed,10);
             }
         }
         
         if(dir == forward && coordinates[0] == 3){
             if(dig.r1&& dig.r2 && dig.r3){
-                //coordinates[1]++;
                 motor_forward(forward_speed,100);
             }
         }
         
         if(coordinates[0] == 7 && dir == forward && dig.r1&& dig.r2 && dig.r3){
                 switch_dir(&dir,'r');
-                //robot_turn_right(200,100);
-                //coordinates[1]--;
-                //dir = right;
         }
         
         
@@ -356,7 +350,7 @@ void zmain(void)
                 switch_dir(&dir,'l');
                 robot_turn_left(100,50);
             }
-            //dir = right;
+            
             int start_cord = coordinates[0];
             while(true){
                 reflectance_digital(&dig);
@@ -372,6 +366,8 @@ void zmain(void)
                         switch_dir(&dir,'r');
                         robot_turn_right(100,50);
                     }
+                    motor_forward(0,0);
+                    vTaskDelay(30);
                     d = Ultra_GetDistance();
                     if(d > 15){
                         break;
@@ -389,7 +385,7 @@ void zmain(void)
                             d = Ultra_GetDistance();
                             dir = left;
                         }
-                        
+                        printf("%d\n",d);
                     }
                 }
                 motor_forward(forward_speed,10);
@@ -442,9 +438,16 @@ void zmain(void)
                     }
                     printf("%d - %d\n", coordinates[0], coordinates[1]);
                 }
-                motor_forward(forward_speed,10);
+                motor_forward(forward_speed,5);
                 robot_keep_on_line(dig);
             }
+        }
+        //Robot is at the end
+        else if(coordinates[1] > 12 && !dig.r1&& !dig.l1){
+            motor_forward(0,0);
+            end_time = xTaskGetTickCount();
+            printf("at the end of the road. Time took: %.2f\n", (float)(end_time - start_time)/ 1000);
+            break;
         }
         
         
@@ -487,6 +490,10 @@ void zmain(void)
         //printf("%5d %5d %5d %5d %5d %5d \r\n", dig.l3, dig.l2, dig.l1, dig.r1, dig.r2, dig.r3);        
         
         //vTaskDelay(10);
+    }
+    
+    while(true){
+        vTaskDelay(1000);
     }
 }   
 #endif
