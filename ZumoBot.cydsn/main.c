@@ -228,6 +228,56 @@ void zmain(void)
  }   
 #endif
 
+#if 1
+void zmain(void){
+    struct sensors_ ref;
+    struct sensors_ dig;
+    IR_Start();
+    reflectance_start();
+    motor_start();
+    Ultra_Start();
+    reflectance_set_threshold(9000, 9000, 11000, 11000, 9000, 9000); // set center sensor threshold to 11000 and others to 9000
+    while(true){
+        reflectance_digital(&dig);
+        if(dig.l3 && dig.r3){
+            motor_forward(0,0);
+            IR_wait();
+            
+            while(dig.l1 || dig.r1 || dig.l3 || dig.r3){
+                reflectance_digital(&dig);
+                motor_forward(100,5);
+            }
+            break;
+        }
+        else{
+            motor_forward(50,5);
+        }
+    }
+    
+    while(true){
+        int d = Ultra_GetDistance();
+        reflectance_digital(&dig);
+        int time = xTaskGetTickCount();
+        if(dig.l2 || dig.l3){
+            robot_turn_right(255, time % 90);
+        }
+        else if(dig.r2 || dig.r3){
+            robot_turn_right(255,time % 90);
+        }
+        if(d < 10){
+            robot_turn_left(255,time % 90);
+        }
+        else{
+            motor_forward(150,5);
+        }
+    }
+}    
+
+
+#endif
+
+
+
 #if 0
 //IR receiver - read raw data
 void zmain(void)
@@ -255,7 +305,7 @@ void zmain(void)
 #endif
 
 
-#if 1
+#if 0
 //reflectance
 
 void zmain(void)
@@ -279,14 +329,15 @@ void zmain(void)
             stopLine = 1;
             motor_forward(0,0);
             while(true){
-                if(SW1_Read() == 0){
-                    motor_forward(150,100);
-                    while(dig.l3&& dig.l2 && dig.l1 && dig.r1&& dig.r2 && dig.r3){
-                        reflectance_digital(&dig);
-                    }
-                    start_time = xTaskGetTickCount();
-                    break;
+                
+                IR_wait();
+                motor_forward(150,100);
+                while(dig.l3&& dig.l2 && dig.l1 && dig.r1&& dig.r2 && dig.r3){
+                    reflectance_digital(&dig);
                 }
+                start_time = xTaskGetTickCount();
+                break;
+                
             }
             
             break;
@@ -308,7 +359,7 @@ void zmain(void)
         reflectance_read(&ref);
         reflectance_digital(&dig); 
         
-         if(coordinates[1] == 0 && dig.l3&& dig.l2 && dig.l1 && dig.r1&& dig.r2 && dig.r3 && !b_first_line){
+        if(coordinates[1] == 0 && dig.l3&& dig.l2 && dig.l1 && dig.r1&& dig.r2 && dig.r3 && !b_first_line){
             b_first_line = 1;
             switch_dir(&dir,'l');
             motor_forward(100,150);
@@ -443,7 +494,7 @@ void zmain(void)
             }
         }
         //Robot is at the end
-        else if(coordinates[1] > 12 && !dig.r1&& !dig.l1){
+        else if(coordinates[1] > 11 && !dig.r1&& !dig.l1){
             motor_forward(0,0);
             end_time = xTaskGetTickCount();
             printf("at the end of the road. Time took: %.2f\n", (float)(end_time - start_time)/ 1000);
