@@ -24,8 +24,9 @@ void robot_turn_right(int speed, int delay);
 void robot_keep_on_line(struct sensors_ dig);
 void switch_dir(enum direction *dir, char new_dir);
 
-//ZUMO
-#if 1
+
+//Zumo
+#if 0
 void zmain(void){
     struct sensors_ ref;
     struct sensors_ dig;
@@ -60,20 +61,17 @@ void zmain(void){
     while(true){
         int d = Ultra_GetDistance();
         reflectance_digital(&dig);
-        int time = xTaskGetTickCount();
+        int time = xTaskGetTickCount() * 2;
         if(dig.l2 || dig.l3){
-            robot_turn_right(239, 55);
+            robot_turn_right(255, time % 255);
             angle += 45;
         }
         else if(dig.r2 || dig.r3){
-            robot_turn_left(239, 55);
+            robot_turn_left(255, time % 255);
             angle -= 45;
         }
         if(d < 10){
-            robot_turn_left(239, 55);
-            angle -= 45;
-            print_mqtt("Zumo011/hit", "%d %d", xTaskGetTickCount(), angle % 360);
-            printf("%d %d\n", xTaskGetTickCount(), angle % 360);
+            robot_turn_left(255, time % 255);
         }
         else{
             motor_forward(150,5);
@@ -95,11 +93,130 @@ void zmain(void){
 
 
 #endif
-
-
-
-//maze
+//Line follow
 #if 0
+    void firstline(void);
+    void linefollow(void);
+    void stopthis(void);
+
+    
+void zmain(void)
+{
+    motor_start();              // enable motor controller
+    reflectance_start();        // enable reflectance sensor
+    reflectance_set_threshold(9000,9000,11000,11000,9000,9000); // reflectance threshold 
+    IR_Start();      // enables  infrared sensors
+    
+    TickType_t start; 
+    TickType_t end;
+    int finaltime, finaltime_tics, starttime, endtime, linecount=0;
+    struct sensors_ ref;
+    struct sensors_ dig;
+    
+    print_mqtt("Zumo011: Fetching starting position...", "Press button while I'm on track.");
+    while(1)      // while loop to wait for button press
+    {
+        vTaskDelay(3);
+        if(!SW1_Read())
+        {
+            vTaskDelay(300);
+            break;
+        }
+    }
+    firstline();             // acquires starting position (first black line that crosses track)
+    print_mqtt("Zumo011: ready", "line");
+    IR_flush();              // clears previous IR sensor data
+    IR_wait();               // waits for IR signal to start following line
+    start = xTaskGetTickCount();
+    starttime = start / 1000;
+    print_mqtt("Zumo011: start_tick", "%d", start);
+    if(dig.r3 && dig.l3)      // exit starting line
+    {
+        motor_forward(255,400);
+    }
+    linefollow();     // linefollow function
+    
+    
+    end = xTaskGetTickCount();
+    endtime = end / 1000;
+    finaltime = endtime - starttime;
+    finaltime_tics = end - start;
+    print_mqtt("Zumo011: endt_tick:","%d", end);
+    print_mqtt("Zumo011: The final time is:", "%d sec (%d tics)", finaltime, finaltime_tics);
+    stopthis();   // stop function
+    
+}
+void firstline()    // drive to starting position
+{
+    struct sensors_ ref;
+    struct sensors_ dig;
+    
+    while(1)    // while loop to drive forward until starting line is encountered
+    {
+       reflectance_digital(&dig);
+       if(dig.r1 && dig.l1 && !dig.r3 && !dig.l3)    // middle sensors true but peripheral sensors false: go forward
+       {
+          motor_forward(20,2);
+       }
+       if(dig.r3 && dig.l3)    // peripheral sensors true: stop and break while loop
+       {
+          motor_forward(0,0);
+          break;
+       }
+    }
+    vTaskDelay (3);
+    return;
+}
+void linefollow()    // linefollowing function
+{
+    struct sensors_ ref;
+    struct sensors_ dig;
+    while(1)
+    {
+    reflectance_digital(&dig);
+    if(dig.r1 && dig.l1 && !dig.l3 && !dig.r3)      // if middle sensors read true, go forward
+    {
+       motor_forward(255,1);
+    }
+    else if(!dig.r1 && dig.l1)    // if statement for turning
+    {
+        motor_turn(0,255,1);
+    }
+    else if(dig.r1 && !dig.l1)    // if statement for turning
+    {
+        motor_turn(255,0,1);
+    }
+    else if(dig.l1 && dig.l3 && dig.r1 && dig.r3)    // encountering first line starts ending sequence
+    {
+        motor_forward(100,200);    // getting over first line
+        while(1)    // while loop that breaks when encountering second line
+        {
+            motor_forward(100,1);
+            reflectance_digital(&dig);
+            if(dig.l3 && dig.r3)
+            {
+                motor_stop();
+                vTaskDelay(300);
+                return;
+            }
+            
+        }
+    }
+    }
+
+}
+void stopthis()    // function to end main in an infinite while loop
+{
+    
+    while(1)
+    {
+        motor_stop();    // motor is stopped
+        vTaskDelay(100);    // endlessly cycles in vTaskDelay
+    }
+}
+#endif
+//Maze
+#if 1
 
 void zmain(void)
 {
