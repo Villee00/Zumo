@@ -28,7 +28,6 @@ void switch_dir(enum direction *dir, char new_dir);
 //Zumo
 #if 0
 void zmain(void){
-    struct sensors_ ref;
     struct sensors_ dig;
     IR_Start();
     reflectance_start();
@@ -41,10 +40,12 @@ void zmain(void){
     
     while(true){
         reflectance_digital(&dig);
+        //Got to the starting line. Wait until IR
         if(dig.l3 && dig.r3){
             motor_forward(0,0);
             IR_wait();
             print_mqtt("Zumo011/ready", "zumo");
+            //move over the starting line
             while(dig.l1 || dig.r1 || dig.l3 || dig.r3){
                 reflectance_digital(&dig);
                 motor_forward(100,5);
@@ -62,14 +63,18 @@ void zmain(void){
         int d = Ultra_GetDistance();
         reflectance_digital(&dig);
         int time = xTaskGetTickCount() * 2;
+        //If left sensors see a line turn right
         if(dig.l2 || dig.l3){
             robot_turn_right(255, time % 255);
             angle += 45;
         }
+        //If right sensors see a line turn left
         else if(dig.r2 || dig.r3){
             robot_turn_left(255, time % 255);
             angle -= 45;
         }
+        
+        //turn left if there is an object infront of the robot
         if(d < 10){
             robot_turn_left(255, time % 255);
         }
@@ -77,7 +82,7 @@ void zmain(void){
             motor_forward(150,5);
         }
         
-        //stop the robot if button is pressed
+        //stop the robot when the button is pressed
         if(SW1_Read() == 0){
             motor_forward(0,0);
             int end_time = xTaskGetTickCount();
@@ -93,11 +98,12 @@ void zmain(void){
 
 
 #endif
+
 //Line follow
 #if 0
-    void firstline(void);
-    void linefollow(void);
-    void stopthis(void);
+void firstline(void);
+void linefollow(void);
+void stopthis(void);
 
     
 void zmain(void)
@@ -109,8 +115,7 @@ void zmain(void)
     
     TickType_t start; 
     TickType_t end;
-    int finaltime, finaltime_tics, starttime, endtime, linecount=0;
-    struct sensors_ ref;
+    int finaltime, finaltime_tics, starttime, endtime;
     struct sensors_ dig;
     
     print_mqtt("Zumo011: Fetching starting position...", "Press button while I'm on track.");
@@ -148,7 +153,6 @@ void zmain(void)
 }
 void firstline()    // drive to starting position
 {
-    struct sensors_ ref;
     struct sensors_ dig;
     
     while(1)    // while loop to drive forward until starting line is encountered
@@ -169,7 +173,6 @@ void firstline()    // drive to starting position
 }
 void linefollow()    // linefollowing function
 {
-    struct sensors_ ref;
     struct sensors_ dig;
     while(1)
     {
@@ -333,6 +336,7 @@ void zmain(void)
                     }
                     motor_forward(0,0);
                     vTaskDelay(30);
+                    print_mqtt("Zumo011/position", "%d %d", coordinates[0], coordinates[1]);
                     //Look if there is an obsticle close at the lane
                     d = Ultra_GetDistance();
                     if(d > 15){
@@ -355,6 +359,7 @@ void zmain(void)
                 }
                 motor_forward(forward_speed, delay);
                 robot_keep_on_line(dig);
+                
             }
             
         }
@@ -405,8 +410,7 @@ void zmain(void)
                             break;
             
                     }
-                    print_mqtt("Zumo028/position", "%d %d", coordinates[0], coordinates[1]);
-                    printf("%d - %d\n", coordinates[0], coordinates[1]);
+                    print_mqtt("Zumo011/position", "%d %d", coordinates[0], coordinates[1]);
                 }
 
             }
@@ -416,7 +420,7 @@ void zmain(void)
             motor_forward(0,0);
             end_time = xTaskGetTickCount();
             print_mqtt("Zumo011/stop","%d",end_time);
-            printf("at the end of the road. Time took: %.2f\n", (float)(end_time - start_time)/ 1000);
+            //printf("at the end of the road. Time took: %.2f\n", (float)(end_time - start_time)/ 1000);
             print_mqtt("Zumo011/time","%d", end_time - start_time);
             break;
         }
@@ -442,7 +446,7 @@ void zmain(void)
                     break;
             
             }
-            printf("%d - %d\n", coordinates[0], coordinates[1]);
+            print_mqtt("Zumo011/position", "%d %d", coordinates[0], coordinates[1]);
         }
         
        
